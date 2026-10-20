@@ -29,7 +29,7 @@ OptionParser.new do |parser|
 end.parse!
 raise "use at least two rounds" unless options[:rounds] >= 2
 apps = options[:apps].split(",")
-allowed = %w[rails django laravel express express-bun elixir go rust c cpp]
+allowed = %w[rails axum-dsl django laravel express express-bun elixir go rust c cpp]
 raise "apps must be nonempty, unique and supported" unless !apps.empty? && apps.uniq == apps && apps.all? { |app| allowed.include?(app) }
 selected_routes = options[:routes].split(",")
 raise "unknown or empty route selection" unless !selected_routes.empty? && (selected_routes - %w[room_show messages_page sidebar search avatar static_css up post_message]).empty?
@@ -119,6 +119,7 @@ begin
       metadata[:runtimes][app] = runtimes.fetch(app)
       metadata[:topology][app] = case kind
       when "rails" then {http_workers: config.fetch("WEB_CONCURRENCY"), threads: config.fetch("RAILS_MAX_THREADS"), jobs: "Redis/Resque", cable: "Action Cable"}
+      when "axum-dsl" then {processes: 1, runtime: "axum_dsl", cable: "none", jobs: "none"}
       when "rust" then {processes: 1, readers: config.fetch("RAILS_MAX_THREADS"), job_workers: config.fetch("JOB_CONCURRENCY"), cable: "native tokio", jobs: "in-process"}
       when "go" then {processes: 1, cable: "native websocket", jobs: "in-process"}
       when "elixir" then {processes: 1, runtime: "BEAM", jobs: "Redis/Resque", cable: "native"}
@@ -128,7 +129,7 @@ begin
       when "cpp" then {processes: 1, page_cache_mb: config.fetch("CAMPFIRE_PAGE_CACHE_MB", "32"), cable: "native", jobs: "in-process"}
       when "django" then {http_workers: config.fetch("WEB_WORKERS", config["REDIS_URL"].to_s.empty? ? "1" : "affinity, capped at 4"), runtime: "ASGI/Uvicorn", cable: "native", jobs: "leased auxiliary SQLite"}
       end
-      unless %w[c cpp].include?(kind)
+      unless %w[c cpp axum-dsl].include?(kind)
         metadata[:topology][app][:response_cache_mb] = config.fetch("CAMPFIRE_RESPONSE_CACHE_MB", "64")
       end
       command = ["docker", "run", "-d", "--name", container, "--network", "host", "--cpuset-cpus", options[:cpus]]
